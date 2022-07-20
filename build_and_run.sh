@@ -2,4 +2,4 @@
 
 ./build.sh
 
-emscripten/emrun --browser chrome build/MIX_WEBXR.html
+$EMSDK/upstream/emscripten/emrun --browser google-chrome-unstable build/MIX_WEBXR.html
