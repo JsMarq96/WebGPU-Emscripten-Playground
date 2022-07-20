@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <iostream>
 #include <cassert>
@@ -7,8 +8,50 @@
 #include "basic_render.h"
 
 
+sRenderContext current_render_context;
+
+
+void frame() {
+    // Get current render target from the swapchain
+    WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(current_render_context.swapchain);
+
+    //TODO renderWith(back_buffer, current_render_context);
+}
+
+
+
+void create_swapchain(const WGPUAdapter adapter,
+                      const WGPUDevice device) {
+    // Get & create the render surface
+    WGPUSurfaceDescriptorFromCanvasHTMLSelector canvas_descriptor = {.selector = "#render-canvas"}; // from the html
+    WGPUSurfaceDescriptor surface_descriptor = {.nextInChain = (WGPUChainedStruct*) &canvas_descriptor};
+    WGPUSurface surface = wgpuInstanceCreateSurface(NULL, &surface_descriptor);
+
+    // Define Swapchain
+    WGPUSwapChainDescriptor swapchain_descriptor = {
+      .usage = WGPUTextureUsage_RenderAttachment,
+      .format = WGPUTextureFormat_BGRA8Unorm,
+      .width = 200, .height = 200, // TODO: fetch from canvas??
+      .presentMode = WGPUPresentMode_Fifo
+    };
+    WGPUSwapChain swapchain = wgpuDeviceCreateSwapChain(device,
+                                                        surface,
+                                                        &swapchain_descriptor);
+
+    // Store the current render context globally
+    current_render_context = {
+        .surface = surface,
+        .adapter = adapter,
+        .device = device,
+        .swapchain = swapchain
+    };
+
+    emscripten_set_main_loop(NULL, 0, false);
+
+}
+
 void _device_callback(WGPURequestDeviceStatus status,
-                      WGPUDevice,
+                      WGPUDevice device,
                       char const *message,
                       void *user_data) {
     assert(status == WGPURequestDeviceStatus_Success && "Error fetching device");
