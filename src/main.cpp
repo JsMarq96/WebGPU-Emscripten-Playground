@@ -40,7 +40,7 @@ inline void config_WGPU() {
 int EMSCRIPTEN_KEEPALIVE main() {
     std::cout << "Test!" << std::endl;
 
-    //config_WGPU();
+     config_WGPU();
 
 
     return 0;
