@@ -6,6 +6,10 @@ file(GLOB CPP_SOURCES "src/*.cpp")
 file(GLOB CPP_SUBFOLDER_SOURCES "src/**/*.cpp")
 file(GLOB C_SOURCES "src/*.c")
 file(GLOB C_SUBFOLDER_SOURCES "src/**/*.c")
+file(GLOB EMS_INCLUDES_SUB "$ENV{EMSDK}/upstream/emscripten/cache/sysroot/include/*/*.h")
+file(GLOB EMS_INCLUDES "$ENV{EMSDK}/upstream/emscripten/cache/sysroot/include/*.h")
+
+include_directories(MIX_WEBXR ${EMS_INCLUDES} ${EMS_INCLUDES_SUB})
 
 add_executable(MIX_WEBXR ${CPP_SOURCES} ${C_SOURCES})
 

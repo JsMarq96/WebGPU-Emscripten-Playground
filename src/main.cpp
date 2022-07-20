@@ -4,6 +4,7 @@
 #include <cassert>
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu.h>
+#include "basic_render.h"
 
 
 void _device_callback(WGPURequestDeviceStatus status,
