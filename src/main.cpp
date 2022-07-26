@@ -11,7 +11,7 @@
 sRenderContext current_render_context;
 
 
-void frame() {
+void frame_loop() {
     // Get current render target from the swapchain
     WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(current_render_context.swapchain);
 
@@ -31,7 +31,7 @@ void create_swapchain(const WGPUAdapter adapter,
     WGPUSwapChainDescriptor swapchain_descriptor = {
       .usage = WGPUTextureUsage_RenderAttachment,
       .format = WGPUTextureFormat_BGRA8Unorm,
-      .width = 200, .height = 200, // TODO: fetch from canvas??
+      .width = 800, .height = 800, // TODO: fetch from canvas??
       .presentMode = WGPUPresentMode_Fifo
     };
     WGPUSwapChain swapchain = wgpuDeviceCreateSwapChain(device,
@@ -43,10 +43,11 @@ void create_swapchain(const WGPUAdapter adapter,
         .surface = surface,
         .adapter = adapter,
         .device = device,
+        .queue = wgpuDeviceGetQueue(device),
         .swapchain = swapchain
     };
 
-    emscripten_set_main_loop(NULL, 0, false);
+    emscripten_set_main_loop(frame_loop, 0, false);
 
 }
 
