@@ -125,11 +125,63 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
     // 3 - Create shaders
     WGPUShaderModule basic_shader;
     {
-        WGPUShaderModuleWGSLDescriptor shader_descr{};
-        shader_descr.source = raw_basic_shader;
-        shader_descr.chain = reinterpret_cast<WGPUChainedStruct*>(&shader_descr);
+        WGPUShaderModuleWGSLDescriptor shader_wgsl_descr{};
+        WGPUShaderModuleDescriptor shader_desc {};
+        shader_wgsl_descr.source = raw_basic_shader;
+        shader_wgsl_descr.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
+
+        shader_desc.nextInChain = (WGPUChainedStruct*) &shader_desc;
+        shader_desc.label = NULL;
+
+        basic_shader = wgpuDeviceCreateShaderModule(renderer.context.device,
+                                                    &shader_desc);
     }
+
+    // 4 - Crete the rendering pipeline
+    // Bindgroup layout: EMPTY for this test
+    WGPUBindGroup bind_group;
+    {
+        // The layout is composed on entries
+        //   each entry defines the visibility of the buffer,
+        //   the buffer, adn the biding position
+        WGPUBindGroupLayoutDescriptor layout_descr = {};
+        WGPUBindGroupLayout layout = wgpuDeviceCreateBindGroupLayout(renderer.context.device,
+                                                                     &layout_descr);
+
+        WGPUBindGroupDescriptor desc = {  .layout = layout, .entryCount = 0, .entries = NULL };
+        bind_group = wgpuDeviceCreateBindGroup(renderer.context.device, &desc);
+    }
+
+    // Create pipeline
+    WGPURenderPipeline pipeline;
+    {
+        WGPUPipelineLayoutDescriptor pipeline_descr = {.bindGroupLayoutCount = 0, .bindGroupLayouts = NULL };
+
+        WGPURenderPipelineDescriptor descr = { .layout = wgpuDeviceCreatePipelineLayout(renderer.context.device, &pipeline_descr)};
+        // Shader states
+        // - Color state: define for the color & blending stages of the pipeline
+        WGPUColorTargetState color_state = {.format = WGPUTextureFormat_BGRA8Unorm };
+        // - Depth stencil: define the depth ofr the pass
+        // None needed on this example
+        // - Vertex state: define the vertex shader
+        descr.vertex = {.module = basic_shader, .entryPoint = "vert_main"};
+        // - Fragemtn state: idem
+        WGPUFragmentState frag_state = {.module = basic_shader, .entryPoint = "frag_main", .targetCount = 1, .targets = &color_state};
+        descr.fragment = &frag_state;
+        // - Primitve state: define the face culling & primitive for the pipeline
+        descr.primitive.frontFace = WGPUFrontFace_CCW;
+        descr.primitive.cullMode = WGPUCullMode_None;
+        descr.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+        descr.primitive.stripIndexFormat = WGPUIndexFormat_Undefined; // ??
+
+        pipeline = wgpuDeviceCreateRenderPipeline(renderer.context.device, &descr);
+    }
+
     return renderer;
+}
+
+inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
+
 }
 
 #endif // BASIC_RENDER_H_
