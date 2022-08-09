@@ -69,7 +69,7 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
           .format = WGPUTextureFormat_BGRA8Unorm,
           .sampleCount = 1
         };
-        WGPUTexture color_tex = wgpuDeviceCreateTexture(renderer.context.device, NULL);
+        WGPUTexture color_tex = wgpuDeviceCreateTexture(renderer.context.device, &descr_color_tex);
         renderer.color_attachment = wgpuTextureCreateView(color_tex, NULL);
     }
 
@@ -192,7 +192,7 @@ inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
             WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, NULL);
 
             wgpuRenderPassEncoderSetPipeline(pass, renderer.pipeline);
-            wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+            wgpuRenderPassEncoderDraw(pass, 3, 0, 0, 0);
             wgpuRenderPassEncoderEnd(pass);
         }
         wgpuCommandEncoderFinish(encoder, NULL);

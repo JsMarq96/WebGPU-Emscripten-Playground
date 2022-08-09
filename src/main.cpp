@@ -12,11 +12,15 @@
 
 sRenderContext current_render_context;
 
+sRenderer renderer;
+WGPUInstance w_instance = NULL;
+
 void frame_loop() {
     // Get current render target from the swapchain
     WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(current_render_context.swapchain);
-
+    std::cout << "frame" << std::endl;
     //TODO renderWith(back_buffer, current_render_context);
+    render(renderer, back_buffer);
 }
 
 
@@ -24,7 +28,9 @@ void frame_loop() {
 void create_swapchain(const WGPUAdapter adapter,
                       const WGPUDevice device) {
     // Get & create the render surface
-    WGPUSurfaceDescriptorFromCanvasHTMLSelector canvas_descriptor = {.selector = "#render-canvas"}; // from the html
+    WGPUSurfaceDescriptorFromCanvasHTMLSelector canvas_descriptor = {}; // from the html
+    canvas_descriptor.selector = "#canvas";
+    canvas_descriptor.chain.sType = WGPUSType_SurfaceDescriptorFromCanvasHTMLSelector;
     WGPUSurfaceDescriptor surface_descriptor = {.nextInChain = (WGPUChainedStruct*) &canvas_descriptor};
     WGPUSurface surface = wgpuInstanceCreateSurface(NULL, &surface_descriptor);
 
@@ -48,6 +54,7 @@ void create_swapchain(const WGPUAdapter adapter,
         .swapchain = swapchain
     };
 
+    renderer = create_renderer_with_context(current_render_context);
     emscripten_set_main_loop(frame_loop, 0, false);
 
 }
@@ -66,6 +73,8 @@ void _device_callback(WGPURequestDeviceStatus status,
     WGPUAdapter *adapter = (WGPUAdapter*) user_data;
     // Application main
     std::cout << "Everything is a-ok" << std::endl;
+
+    create_swapchain(*adapter, device);
 }
 
 void _adapter_callback(WGPURequestAdapterStatus status,
@@ -87,8 +96,6 @@ void _adapter_callback(WGPURequestAdapterStatus status,
 inline void config_WGPU() {
 
     WGPUDevice device;
-
-    WGPUInstance w_instance = NULL;
 
     wgpuInstanceRequestAdapter(w_instance, NULL, _adapter_callback, NULL);
 }
