@@ -6,10 +6,11 @@
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu.h>
 #include "basic_render.h"
+#include "renderer_wgl2.h"
 
+#define CANVAS_ID "render-canvas"
 
 sRenderContext current_render_context;
-
 
 void frame_loop() {
     // Get current render target from the swapchain
@@ -55,7 +56,12 @@ void _device_callback(WGPURequestDeviceStatus status,
                       WGPUDevice device,
                       char const *message,
                       void *user_data) {
-    assert(status == WGPURequestDeviceStatus_Success && "Error fetching device");
+    //assert(status == WGPURequestDeviceStatus_Success && "Error fetching device");
+
+    if (status != WGPURequestDeviceStatus_Success) {
+        std::cout << "Could not load WebGPU, loading WebGL2" << std::endl;
+        init_webgl2(CANVAS_ID);
+    }
 
     WGPUAdapter *adapter = (WGPUAdapter*) user_data;
     // Application main
@@ -66,7 +72,12 @@ void _adapter_callback(WGPURequestAdapterStatus status,
                        WGPUAdapter adapter,
                        char const *message,
                        void *userdata) {
-    assert(status == WGPURequestAdapterStatus_Success && "Error fetching adapter");
+    //assert(status == WGPURequestAdapterStatus_Success && "Error fetching adapter");
+    if (status != WGPURequestAdapterStatus_Success) {
+        std::cout << "Could not load WebGPU, loading WebGL2" << std::endl;
+        init_webgl2(CANVAS_ID);
+    }
+
 
     wgpuAdapterRequestDevice(adapter, NULL, _device_callback, (void*) &adapter);
 }
@@ -80,6 +91,10 @@ inline void config_WGPU() {
     WGPUInstance w_instance = NULL;
 
     wgpuInstanceRequestAdapter(w_instance, NULL, _adapter_callback, NULL);
+}
+
+inline void config_WebGL2() {
+
 }
 
 int EMSCRIPTEN_KEEPALIVE main() {

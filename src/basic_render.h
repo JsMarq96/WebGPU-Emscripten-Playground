@@ -38,6 +38,8 @@ struct sRenderer {
     WGPUTextureView color_attachment;
     WGPUTextureView depth_attachment;
 
+    WGPURenderPipeline pipeline;
+
     // Create textures
     // Create render pipeline
     // COnfigure renderpass
@@ -153,7 +155,6 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
     }
 
     // Create pipeline
-    WGPURenderPipeline pipeline;
     {
         WGPUPipelineLayoutDescriptor pipeline_descr = {.bindGroupLayoutCount = 0, .bindGroupLayouts = NULL };
 
@@ -174,14 +175,29 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
         descr.primitive.topology = WGPUPrimitiveTopology_TriangleList;
         descr.primitive.stripIndexFormat = WGPUIndexFormat_Undefined; // ??
 
-        pipeline = wgpuDeviceCreateRenderPipeline(renderer.context.device, &descr);
+        renderer.pipeline = wgpuDeviceCreateRenderPipeline(renderer.context.device, &descr);
     }
 
     return renderer;
 }
 
 inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
+    WGPURenderPassColorAttachment attachment = { .view = text_view, .loadOp = WGPULoadOp_Clear, .storeOp = WGPUStoreOp_Store, .clearValue= {0.0f, 0.0f, 0.0f, 1.0f} };
+    WGPURenderPassDescriptor renderpass = { .colorAttachmentCount = 1, .colorAttachments = &attachment };
 
+    WGPUCommandBuffer commands;
+    {
+        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer.context.device, NULL);
+        {
+            WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, NULL);
+
+            wgpuRenderPassEncoderSetPipeline(pass, renderer.pipeline);
+            wgpuRenderPassEncoderDraw(pass, 3, 1, 0, 0);
+            wgpuRenderPassEncoderEnd(pass);
+        }
+        wgpuCommandEncoderFinish(encoder, NULL);
+    }
+    wgpuQueueSubmit(renderer.context.queue, 1, &commands);
 }
 
 #endif // BASIC_RENDER_H_

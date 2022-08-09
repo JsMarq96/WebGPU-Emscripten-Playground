@@ -7,4 +7,4 @@ cd build/
 
 emcmake cmake ..
 
-intercept-build make
+make
