@@ -4,6 +4,8 @@
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu.h>
 
+//#include <iostream>
+
 #include "raw_shaders.h"
 
 #define SHADER_COUNT 20
@@ -39,6 +41,11 @@ struct sRenderer {
     WGPUTextureView depth_attachment;
 
     WGPURenderPipeline pipeline;
+
+    // Buffers
+    WGPUBuffer vertex_buffer;
+    WGPUBuffer color_buffer;
+    WGPUBuffer indices_buffer;
 
     // Create textures
     // Create render pipeline
@@ -77,52 +84,52 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
     // Raw data
     const float raw_vertices[] = {1.0f, -1.0f, 0.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f};
     const float raw_colors[] = { 1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   0.0f, 0.0f, 1.0f };
-    const uint16_t raw_indices[] = { 1, 2, 3 };
+    const uint16_t raw_indices[4] = { 1, 2, 3, 0 }; // Added a item for padding
 
     // Create & fill wgpu buffers
-    WGPUBuffer vertex_buffer;
-    WGPUBuffer color_buffer;
-    WGPUBuffer indices_buffer;
-
 
     { // Vertices
         WGPUBufferDescriptor buff_descr = {
                .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
                .size = sizeof(raw_vertices)
         };
-        vertex_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
+        renderer.vertex_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
         wgpuQueueWriteBuffer(renderer.context.queue,
-                             vertex_buffer,
+                             renderer.vertex_buffer,
                              0,
                              raw_vertices,
                              sizeof(raw_vertices));
     }
+
+    
 
     { // Colors
         WGPUBufferDescriptor buff_descr = {
                .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
                .size = sizeof(raw_colors)
         };
-        color_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
+        renderer.color_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
         wgpuQueueWriteBuffer(renderer.context.queue,
-                             color_buffer,
+                             renderer.color_buffer,
                              0,
                              raw_colors,
                              sizeof(raw_colors));
     }
+    
 
     { // Indices
         WGPUBufferDescriptor buff_descr = {
                .usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst,
                .size = sizeof(raw_indices)
         };
-        indices_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
+        renderer.indices_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
         wgpuQueueWriteBuffer(renderer.context.queue,
-                             indices_buffer,
+                             renderer.indices_buffer,
                              0,
                              raw_indices,
                              sizeof(raw_indices));
     }
+
 
     // 3 - Create shaders
     WGPUShaderModule basic_shader;
@@ -132,13 +139,15 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
         shader_wgsl_descr.source = raw_basic_shader;
         shader_wgsl_descr.chain.sType = WGPUSType_ShaderModuleWGSLDescriptor;
 
-        shader_desc.nextInChain = (WGPUChainedStruct*) &shader_desc;
-        shader_desc.label = NULL;
+        shader_desc = (WGPUShaderModuleDescriptor){
+           .nextInChain = (WGPUChainedStruct*)(&shader_wgsl_descr),
+           .label = NULL,
+        };
 
         basic_shader = wgpuDeviceCreateShaderModule(renderer.context.device,
                                                     &shader_desc);
     }
-
+    
     // 4 - Crete the rendering pipeline
     // Bindgroup layout: EMPTY for this test
     WGPUBindGroup bind_group;
@@ -183,17 +192,19 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
 
 inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
     WGPURenderPassColorAttachment attachment = { .view = text_view, .loadOp = WGPULoadOp_Clear, .storeOp = WGPUStoreOp_Store, .clearValue= {0.0f, 0.0f, 0.0f, 1.0f} };
-    WGPURenderPassDescriptor renderpass = { .colorAttachmentCount = 1, .colorAttachments = &attachment };
+    WGPURenderPassDescriptor renderpass_descr = { .colorAttachmentCount = 1, .colorAttachments = &attachment };
 
     WGPUCommandBuffer commands;
     {
         WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer.context.device, NULL);
         {
-            WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, NULL);
-
+            WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass_descr);
             wgpuRenderPassEncoderSetPipeline(pass, renderer.pipeline);
-            wgpuRenderPassEncoderDraw(pass, 3, 0, 0, 0);
+            wgpuRenderPassEncoderSetVertexBuffer(encoder, 0, renderer.vertex_buffer, 0, WGPU_WHOLE_SIZE);
+            wgpuRenderPassEncoderSetIndexBuffer(pass, renderer.indices_buffer, WGPUIndexFormat_Uint16, 0, WGPU_WHOLE_SIZE);
+            wgpuRenderPassEncoderDrawIndexed(pass, 3, 1, 0, 0, 0);
             wgpuRenderPassEncoderEnd(pass);
+            wgpuRenderPassEncoderRelease(pass);
         }
         wgpuCommandEncoderFinish(encoder, NULL);
     }
