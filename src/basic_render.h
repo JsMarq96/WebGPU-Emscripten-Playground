@@ -3,6 +3,7 @@
 
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu.h>
+#include <webgpu/webgpu_cpp.h>
 
 //#include <iostream>
 
@@ -194,21 +195,39 @@ inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
     WGPURenderPassColorAttachment attachment = { .view = text_view, .loadOp = WGPULoadOp_Clear, .storeOp = WGPUStoreOp_Store, .clearValue= {0.0f, 0.0f, 0.0f, 1.0f} };
     WGPURenderPassDescriptor renderpass_descr = { .colorAttachmentCount = 1, .colorAttachments = &attachment };
 
+    WGPUBuffer buf = renderer.vertex_buffer;
     WGPUCommandBuffer commands;
     {
         WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer.context.device, NULL);
         {
             WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass_descr);
-            wgpuRenderPassEncoderSetPipeline(pass, renderer.pipeline);
-            wgpuRenderPassEncoderSetVertexBuffer(encoder, 0, renderer.vertex_buffer, 0, WGPU_WHOLE_SIZE);
-            wgpuRenderPassEncoderSetIndexBuffer(pass, renderer.indices_buffer, WGPUIndexFormat_Uint16, 0, WGPU_WHOLE_SIZE);
+            wgpuRenderPassEncoderSetPipeline(pass,
+                                             renderer.pipeline);
+
+            wgpuRenderPassEncoderSetViewport(pass,
+                                             0.0f, 0.0f,
+                                             200.0f, 200.0,
+                                             0.0f, 1.0f);
+
+            wgpuRenderPassEncoderSetVertexBuffer(pass,
+                                                 0,
+                                                 renderer.vertex_buffer,
+                                                 0,
+                                                 WGPU_WHOLE_SIZE);
+            wgpuRenderPassEncoderSetIndexBuffer(pass,
+                                                renderer.indices_buffer,
+                                                WGPUIndexFormat_Uint16,
+                                                0,
+                                                WGPU_WHOLE_SIZE);
             wgpuRenderPassEncoderDrawIndexed(pass, 3, 1, 0, 0, 0);
             wgpuRenderPassEncoderEnd(pass);
             wgpuRenderPassEncoderRelease(pass);
         }
-        wgpuCommandEncoderFinish(encoder, NULL);
+        commands = wgpuCommandEncoderFinish(encoder, NULL);
+        wgpuCommandEncoderRelease(encoder);
     }
     wgpuQueueSubmit(renderer.context.queue, 1, &commands);
+    wgpuCommandBufferRelease(commands);
 }
 
 #endif // BASIC_RENDER_H_
