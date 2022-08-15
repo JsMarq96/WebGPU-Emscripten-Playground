@@ -62,29 +62,13 @@ struct sRenderer {
 
 };
 
-inline sRenderer create_renderer_with_context(sRenderContext &cont) {
-    sRenderer renderer = {.context = cont};
-    // 1 - Create render targets
-    // Color
-    {
-       renderer.color_attachment = wgpuSwapChainGetCurrentTextureView(renderer.context.swapchain);
-    }
-    // Depth
-    {
-        WGPUTextureDescriptor descr_color_tex = {
-          .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
-          .size = {200, 200, 1},
-          .format = WGPUTextureFormat_BGRA8Unorm,
-          .sampleCount = 1
-        };
-        WGPUTexture color_tex = wgpuDeviceCreateTexture(renderer.context.device, &descr_color_tex);
-        renderer.color_attachment = wgpuTextureCreateView(color_tex, NULL);
-    }
-
-    // 2 - Create Buffers
-    // Raw data
-    const float raw_vertices[] = {1.0f, -1.0f, 0.0f, -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f};
-    const float raw_colors[] = { 1.0f, 0.0f, 0.0f,   0.0f, 1.0f, 0.0f,   0.0f, 0.0f, 1.0f };
+inline void upload_buffers_to_renderer(sRenderer *renderer) {
+     // Raw data
+    const float raw_vertices[] = {
+         1.0f, -1.0f, 0.0f,     1.0f, 0.0f, 0.0f,
+         -1.0f, -1.0f, 0.0f,    0.0, 1.0f, 0.0f,
+         0.0f, 1.0f, 0.0f,      0.0f, 0.0f, 1.0f
+    };
     const uint16_t raw_indices[4] = { 1, 2, 3, 0 }; // Added a item for padding
 
     // Create & fill wgpu buffers
@@ -94,46 +78,34 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
                .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
                .size = sizeof(raw_vertices)
         };
-        renderer.vertex_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
-        wgpuQueueWriteBuffer(renderer.context.queue,
-                             renderer.vertex_buffer,
+        renderer->vertex_buffer = wgpuDeviceCreateBuffer(renderer->context.device,
+                                                         &buff_descr);
+        wgpuQueueWriteBuffer(renderer->context.queue,
+                             renderer->vertex_buffer,
                              0,
                              raw_vertices,
                              sizeof(raw_vertices));
     }
 
-    
-
-    { // Colors
-        WGPUBufferDescriptor buff_descr = {
-               .usage = WGPUBufferUsage_Vertex | WGPUBufferUsage_CopyDst,
-               .size = sizeof(raw_colors)
-        };
-        renderer.color_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
-        wgpuQueueWriteBuffer(renderer.context.queue,
-                             renderer.color_buffer,
-                             0,
-                             raw_colors,
-                             sizeof(raw_colors));
-    }
-    
 
     { // Indices
         WGPUBufferDescriptor buff_descr = {
                .usage = WGPUBufferUsage_Index | WGPUBufferUsage_CopyDst,
                .size = sizeof(raw_indices)
         };
-        renderer.indices_buffer = wgpuDeviceCreateBuffer(renderer.context.device, &buff_descr);
-        wgpuQueueWriteBuffer(renderer.context.queue,
-                             renderer.indices_buffer,
+        renderer->indices_buffer = wgpuDeviceCreateBuffer(renderer->context.device,
+                                                          &buff_descr);
+        wgpuQueueWriteBuffer(renderer->context.queue,
+                             renderer->indices_buffer,
                              0,
                              raw_indices,
                              sizeof(raw_indices));
     }
 
+}
 
-    // 3 - Create shaders
-    WGPUShaderModule basic_shader;
+inline WGPUShaderModule create_shader_module(const sRenderer &renderer) {
+    WGPUShaderModule shader;
     {
         WGPUShaderModuleWGSLDescriptor shader_wgsl_descr{};
         WGPUShaderModuleDescriptor shader_desc {};
@@ -145,10 +117,34 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
            .label = NULL,
         };
 
-        basic_shader = wgpuDeviceCreateShaderModule(renderer.context.device,
-                                                    &shader_desc);
+        shader = wgpuDeviceCreateShaderModule(renderer.context.device,
+                                              &shader_desc);
     }
-    
+
+    return shader;
+}
+
+inline sRenderer create_renderer_with_context(sRenderContext &cont) {
+    sRenderer renderer = {.context = cont};
+
+    upload_buffers_to_renderer(&renderer);
+
+    // 1 - Create render targets
+    {
+        // Create a Depth Texture
+        WGPUTextureDescriptor descr = {
+            .usage = WGPUTextureUsage_RenderAttachment,
+            .size = { .width = 800, .height = 800, .depthOrArrayLayers = 1},
+            .format = WGPUTextureFormat_Depth16Unorm,
+        };
+
+        WGPUTexture depth = wgpuDeviceCreateTexture(renderer.context.device, &descr);
+        renderer.depth_attachment = wgpuTextureCreateView(depth, NULL);
+    }
+
+    // 3 - Create shaders
+    WGPUShaderModule shader = create_shader_module(renderer);
+
     // 4 - Crete the rendering pipeline
     // Bindgroup layout: EMPTY for this test
     WGPUBindGroup bind_group;
@@ -166,24 +162,68 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
 
     // Create pipeline
     {
-        WGPUPipelineLayoutDescriptor pipeline_descr = {.bindGroupLayoutCount = 0, .bindGroupLayouts = NULL };
+        WGPUPipelineLayoutDescriptor pipeline_descr = {
+           .bindGroupLayoutCount = 0,
+           .bindGroupLayouts = NULL
+        };
+        WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(renderer.context.device,
+                                                                   &pipeline_descr);
 
-        WGPURenderPipelineDescriptor descr = { .layout = wgpuDeviceCreatePipelineLayout(renderer.context.device, &pipeline_descr)};
-        // Shader states
-        // - Color state: define for the color & blending stages of the pipeline
+        // GEOMETRY BUFFER LAYOUT
+        // Geometry position
+        WGPUVertexAttribute atributes[2] = {};
+        // Position attrribute
+        atributes[0] = {
+           .format = WGPUVertexFormat_Float32x3,
+           .offset = 0,
+           .shaderLocation = 0
+        };
+        // Color attribute
+        atributes[1] =  {
+           .format = WGPUVertexFormat_Float32x3,
+           .offset = sizeof(float) * 3,
+           .shaderLocation = 1
+        };
+
+        WGPUVertexBufferLayout buff_layout = {
+          .arrayStride = 6 * sizeof(float),
+          .attributeCount = 2,
+          .attributes = atributes
+        };
+
+
+        // Color state: define for the color & blending stages of the pipeline
         WGPUColorTargetState color_state = {.format = WGPUTextureFormat_BGRA8Unorm };
-        // - Depth stencil: define the depth ofr the pass
-        // None needed on this example
-        // - Vertex state: define the vertex shader
-        descr.vertex = {.module = basic_shader, .entryPoint = "vert_main"};
-        // - Fragemtn state: idem
-        WGPUFragmentState frag_state = {.module = basic_shader, .entryPoint = "frag_main", .targetCount = 1, .targets = &color_state};
-        descr.fragment = &frag_state;
-        // - Primitve state: define the face culling & primitive for the pipeline
-        descr.primitive.frontFace = WGPUFrontFace_CCW;
-        descr.primitive.cullMode = WGPUCullMode_None;
-        descr.primitive.topology = WGPUPrimitiveTopology_TriangleList;
-        descr.primitive.stripIndexFormat = WGPUIndexFormat_Undefined; // ??
+        WGPUFragmentState frag_state = {
+           .module = shader,
+           .entryPoint = "frag_main",
+           .targetCount = 1,
+           .targets = &color_state
+        };
+
+
+        // Pipeline
+       // WGPURenderPipelineDescriptor descr = {
+           // .layout = wgpuDeviceCreatePipelineLayout(renderer.context.device, &pipeline_descr)
+        //};
+
+         WGPURenderPipelineDescriptor descr = {
+           .label = NULL,
+           .layout = layout,
+           .vertex = {
+              .module = shader,
+              .entryPoint = "vert_main",
+              .bufferCount = 1,
+              .buffers = &buff_layout
+           },
+           .primitive = {
+               .topology = WGPUPrimitiveTopology_TriangleList,
+               .stripIndexFormat = WGPUIndexFormat_Undefined, // ??
+               .frontFace = WGPUFrontFace_CCW,
+               .cullMode = WGPUCullMode_None
+           },
+           .fragment = &frag_state,
+        };
 
         renderer.pipeline = wgpuDeviceCreateRenderPipeline(renderer.context.device, &descr);
     }
@@ -191,9 +231,30 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
     return renderer;
 }
 
-inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
-    WGPURenderPassColorAttachment attachment = { .view = text_view, .loadOp = WGPULoadOp_Clear, .storeOp = WGPUStoreOp_Store, .clearValue= {0.0f, 0.0f, 0.0f, 1.0f} };
-    WGPURenderPassDescriptor renderpass_descr = { .colorAttachmentCount = 1, .colorAttachments = &attachment };
+#include <iostream>
+
+inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
+    WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(renderer.context.swapchain);
+
+    WGPURenderPassColorAttachment attachment = {
+        .view = back_buffer,
+        .loadOp = WGPULoadOp_Clear,
+        .storeOp = WGPUStoreOp_Store,
+        .clearValue = {1.0f, 1.0f, 0.0f, 1.0f}
+    };
+
+     WGPURenderPassDepthStencilAttachment depth_attach = {
+        .view = renderer.depth_attachment,
+        .depthLoadOp = WGPULoadOp_Clear,
+        .depthStoreOp = WGPUStoreOp_Store,
+        .depthClearValue = 1.0f,
+     };
+
+    WGPURenderPassDescriptor renderpass_descr = {
+         .colorAttachmentCount = 0,
+         .colorAttachments = NULL,
+         .depthStencilAttachment = &depth_attach
+    };
 
     WGPUBuffer buf = renderer.vertex_buffer;
     WGPUCommandBuffer commands;
@@ -204,23 +265,7 @@ inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
             wgpuRenderPassEncoderSetPipeline(pass,
                                              renderer.pipeline);
 
-            wgpuRenderPassEncoderSetViewport(pass,
-                                             0.0f, 0.0f,
-                                             200.0f, 200.0,
-                                             0.0f, 1.0f);
-
-            wgpuRenderPassEncoderSetVertexBuffer(pass,
-                                                 0,
-                                                 renderer.vertex_buffer,
-                                                 0,
-                                                 WGPU_WHOLE_SIZE);
-            wgpuRenderPassEncoderSetIndexBuffer(pass,
-                                                renderer.indices_buffer,
-                                                WGPUIndexFormat_Uint16,
-                                                0,
-                                                WGPU_WHOLE_SIZE);
-            wgpuRenderPassEncoderDrawIndexed(pass, 3, 1, 0, 0, 0);
-            wgpuRenderPassEncoderEnd(pass);
+                        wgpuRenderPassEncoderEnd(pass);
             wgpuRenderPassEncoderRelease(pass);
         }
         commands = wgpuCommandEncoderFinish(encoder, NULL);
@@ -228,6 +273,8 @@ inline void render(const sRenderer &renderer, WGPUTextureView &text_view) {
     }
     wgpuQueueSubmit(renderer.context.queue, 1, &commands);
     wgpuCommandBufferRelease(commands);
+
+    //wgpuTextureViewRelease(back_buffer);
 }
 
 #endif // BASIC_RENDER_H_

@@ -15,10 +15,12 @@ sRenderContext current_render_context;
 sRenderer renderer;
 WGPUInstance w_instance = NULL;
 
+
+
 void frame_loop() {
     // Get current render target from the swapchain
-    WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(current_render_context.swapchain);
-    std::cout << "frame" << std::endl;
+    WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(renderer.context.swapchain);
+    //std::cout << "frame" << std::endl;
     //TODO renderWith(back_buffer, current_render_context);
     render(renderer, back_buffer);
 }
@@ -36,7 +38,7 @@ void create_swapchain(const WGPUAdapter adapter,
 
     // Define Swapchain
     WGPUSwapChainDescriptor swapchain_descriptor = {
-      .usage = WGPUTextureUsage_RenderAttachment,
+      .usage = WGPUTextureUsage_RenderAttachment, // o output attachment??
       .format = WGPUTextureFormat_BGRA8Unorm,
       .width = 800, .height = 800, // TODO: fetch from canvas??
       .presentMode = WGPUPresentMode_Fifo
