@@ -237,7 +237,7 @@ inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
     WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(renderer.context.swapchain);
 
     WGPURenderPassColorAttachment attachment = {
-        .view = back_buffer,
+        .view = NULL,
         .loadOp = WGPULoadOp_Clear,
         .storeOp = WGPUStoreOp_Store,
         .clearValue = {1.0f, 1.0f, 0.0f, 1.0f}
@@ -251,9 +251,9 @@ inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
      };
 
     WGPURenderPassDescriptor renderpass_descr = {
-         .colorAttachmentCount = 0,
-         .colorAttachments = NULL,
-         .depthStencilAttachment = &depth_attach
+         .colorAttachmentCount = 1,
+         .colorAttachments = &attachment,
+         .depthStencilAttachment = &depth_attach,
     };
 
     WGPUBuffer buf = renderer.vertex_buffer;
@@ -264,8 +264,11 @@ inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
             WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass_descr);
             wgpuRenderPassEncoderSetPipeline(pass,
                                              renderer.pipeline);
-
-                        wgpuRenderPassEncoderEnd(pass);
+            wgpuRenderPassEncoderSetVertexBuffer(pass, 0, renderer.vertex_buffer, 0, WGPU_WHOLE_SIZE);
+            wgpuRenderPassEncoderDraw(pass, 3, 0, 0, 0);
+            //wgpuRenderPassEncoderSetIndexBuffer(pass, renderer.indices_buffer, WGPUIndexFormat_Uint16, 0, WGPU_WHOLE_SIZE);
+            //wgpuRenderPassEncoderDrawIndexed(pass, 3, 1, 0, 0, 0);
+            wgpuRenderPassEncoderEnd(pass);
             wgpuRenderPassEncoderRelease(pass);
         }
         commands = wgpuCommandEncoderFinish(encoder, NULL);
