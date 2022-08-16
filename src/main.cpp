@@ -3,14 +3,22 @@
 #include <ctime>
 #include <iostream>
 #include <cassert>
+#include "basic_render.h"
+
+#ifdef __EMSCRIPTEN__
+// Load Emscripten libs
 #include <emscripten/emscripten.h>
 #include <webgpu/webgpu.h>
-#include "basic_render.h"
-#include "renderer_wgl2.h"
-
 #include <emscripten/html5_webgpu.h>
-
 #define CANVAS_ID "render-canvas"
+
+#else
+// Load Dawn libs
+#include <dawn/webgpu.h>
+#include <dawn/dawn_proc.h>
+#include <dawn_native/DawnNative.h>
+
+#endif
 
 sRenderContext current_render_context;
 
@@ -30,6 +38,10 @@ void frame_loop() {
 }
 
 
+#ifdef __EMSCRIPTEN__
+// =======================
+// EMSCRIPTEN LOADER ---------------
+// =======================
 
 void create_swapchain(const WGPUAdapter adapter,
                       const WGPUDevice device) {
@@ -74,7 +86,7 @@ void _device_callback(WGPURequestDeviceStatus status,
 
     if (status != WGPURequestDeviceStatus_Success) {
         std::cout << "Could not load WebGPU, loading WebGL2" << std::endl;
-        init_webgl2(CANVAS_ID);
+        //init_webgl2(CANVAS_ID);
     }
 
     WGPUAdapter *adapter = (WGPUAdapter*) user_data;
@@ -90,14 +102,33 @@ void _adapter_callback(WGPURequestAdapterStatus status,
     //assert(status == WGPURequestAdapterStatus_Success && "Error fetching adapter");
     if (status != WGPURequestAdapterStatus_Success) {
         std::cout << "Could not load WebGPU, loading WebGL2" << std::endl;
-        init_webgl2(CANVAS_ID);
+        //init_webgl2(CANVAS_ID);
     }
 
 
     wgpuAdapterRequestDevice(adapter, NULL, _device_callback, (void*) &adapter);
 }
+// =======================
+// EMSCRIPTEN LOADER  END---------------
+// =======================
+#else
+dawn_native::Instance instance;
 
+void GetDevice() {
+    instance = dawn_native::Instance();
+    instance.DiscoverDefaultAdapters();
 
+    // Get an adapter for the backend to use, and create the device.
+    dawn_native::Adapter backendAdapter = instance.GetAdapters()[0];
+    assert(backendAdapter.GetBackendType() == dawn_native::BackendType::Metal);
+
+    wgpu::Device device = wgpu::Device::Acquire(backendAdapter.CreateDevice());
+    DawnProcTable procs = dawn_native::GetProcs();
+
+    dawnProcSetProcs(&procs);
+    callback(device);
+}
+#endif
 
 inline void config_WGPU() {
 

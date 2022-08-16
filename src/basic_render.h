@@ -67,9 +67,9 @@ struct sRenderer {
 inline void upload_buffers_to_renderer(sRenderer *renderer) {
      // Raw data
     const float raw_vertices[] = {
-         1.0f, -1.0f, 0.0f,     1.0f, 0.0f, 0.0f,
-         -1.0f, -1.0f, 0.0f,    0.0, 1.0f, 0.0f,
-         0.0f, 1.0f, 0.0f,      0.0f, 0.0f, 1.0f
+         1.0f, 0.0f, -1.0f,     1.0f, 0.0f, 0.0f,
+         -1.0f, 0.0f, -1.0f,    0.0, 1.0f, 0.0f,
+         0.0f, 0.0f, 1.0f,      0.0f, 0.0f, 1.0f
     };
     const uint16_t raw_indices[4] = { 0, 1, 2, 0 }; // Added a item for padding
 
