@@ -3,16 +3,22 @@
 	<head>    
     </head>
 	<body>
+        <style>
+            #canvas {
+                width: 800px;
+                height: 800px;
+            }
+        </style>
 
     <script src="https://cdn.jsdelivr.net/gh/brendan-duncan/webgpu_recorder/webgpu_recorder.js"></script>
     <div class="emscripten_border">
     <script>
-    new WebGPURecorder({
+    /*new WebGPURecorder({
         "frames": 10,
         "export": "WebGPURecord",
         "width": 800,
         "height": 600
-    });
+    });*/
 </script>
       <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
     </div> 

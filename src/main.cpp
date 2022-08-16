@@ -8,6 +8,8 @@
 #include "basic_render.h"
 #include "renderer_wgl2.h"
 
+#include <emscripten/html5_webgpu.h>
+
 #define CANVAS_ID "render-canvas"
 
 sRenderContext current_render_context;
@@ -23,6 +25,8 @@ void frame_loop() {
     //std::cout << "frame" << std::endl;
     //TODO renderWith(back_buffer, current_render_context);
     render(renderer, back_buffer);
+
+    wgpuTextureViewRelease(back_buffer);
 }
 
 
@@ -40,7 +44,7 @@ void create_swapchain(const WGPUAdapter adapter,
     WGPUSwapChainDescriptor swapchain_descriptor = {
       .usage = WGPUTextureUsage_RenderAttachment, // o output attachment??
       .format = WGPUTextureFormat_BGRA8Unorm,
-      .width = 800, .height = 800, // TODO: fetch from canvas??
+      .width = 400, .height = 400, // TODO: fetch from canvas??
       .presentMode = WGPUPresentMode_Fifo
     };
     WGPUSwapChain swapchain = wgpuDeviceCreateSwapChain(device,
@@ -57,8 +61,9 @@ void create_swapchain(const WGPUAdapter adapter,
     };
 
     renderer = create_renderer_with_context(current_render_context);
-    emscripten_set_main_loop(frame_loop, 0, false);
 
+    std::cout << "Everything is a-ok" << std::endl;
+    emscripten_set_main_loop(frame_loop, 0, false);
 }
 
 void _device_callback(WGPURequestDeviceStatus status,
@@ -74,7 +79,6 @@ void _device_callback(WGPURequestDeviceStatus status,
 
     WGPUAdapter *adapter = (WGPUAdapter*) user_data;
     // Application main
-    std::cout << "Everything is a-ok" << std::endl;
 
     create_swapchain(*adapter, device);
 }
@@ -98,7 +102,6 @@ void _adapter_callback(WGPURequestAdapterStatus status,
 inline void config_WGPU() {
 
     WGPUDevice device;
-
     wgpuInstanceRequestAdapter(w_instance, NULL, _adapter_callback, NULL);
 }
 

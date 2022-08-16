@@ -38,8 +38,9 @@ struct sRenderer {
 
     sRenderContext context;
 
-    WGPUTextureView color_attachment;
-    WGPUTextureView depth_attachment;
+    WGPURenderPassColorAttachment color_attachment;
+    WGPURenderPassDepthStencilAttachment depth_attachment;
+    WGPURenderPassDescriptor pass_descr;
 
     WGPURenderPipeline pipeline;
 
@@ -127,106 +128,18 @@ inline WGPUShaderModule create_shader_module(const sRenderer &renderer) {
 inline sRenderer create_renderer_with_context(sRenderContext &cont) {
     sRenderer renderer = {.context = cont};
 
-    upload_buffers_to_renderer(&renderer);
+    renderer.color_attachment = {
+        .view = NULL,
+        .loadOp = WGPULoadOp_Clear,
+        .storeOp = WGPUStoreOp_Store,
+        .clearValue = {0.0f, 0.0f, 1.0f, 1.0f}
+    };
 
-    // 1 - Create render targets
-    {
-        // Create a Depth Texture
-        WGPUTextureDescriptor descr = {
-            .usage = WGPUTextureUsage_RenderAttachment,
-            .size = { .width = 800, .height = 800, .depthOrArrayLayers = 1},
-            .format = WGPUTextureFormat_Depth16Unorm,
-        };
-
-        WGPUTexture depth = wgpuDeviceCreateTexture(renderer.context.device, &descr);
-        renderer.depth_attachment = wgpuTextureCreateView(depth, NULL);
-    }
-
-    // 3 - Create shaders
-    WGPUShaderModule shader = create_shader_module(renderer);
-
-    // 4 - Crete the rendering pipeline
-    // Bindgroup layout: EMPTY for this test
-    WGPUBindGroup bind_group;
-    {
-        // The layout is composed on entries
-        //   each entry defines the visibility of the buffer,
-        //   the buffer, adn the biding position
-        WGPUBindGroupLayoutDescriptor layout_descr = {};
-        WGPUBindGroupLayout layout = wgpuDeviceCreateBindGroupLayout(renderer.context.device,
-                                                                     &layout_descr);
-
-        WGPUBindGroupDescriptor desc = {  .layout = layout, .entryCount = 0, .entries = NULL };
-        bind_group = wgpuDeviceCreateBindGroup(renderer.context.device, &desc);
-    }
-
-    // Create pipeline
-    {
-        WGPUPipelineLayoutDescriptor pipeline_descr = {
-           .bindGroupLayoutCount = 0,
-           .bindGroupLayouts = NULL
-        };
-        WGPUPipelineLayout layout = wgpuDeviceCreatePipelineLayout(renderer.context.device,
-                                                                   &pipeline_descr);
-
-        // GEOMETRY BUFFER LAYOUT
-        // Geometry position
-        WGPUVertexAttribute atributes[2] = {};
-        // Position attrribute
-        atributes[0] = {
-           .format = WGPUVertexFormat_Float32x3,
-           .offset = 0,
-           .shaderLocation = 0
-        };
-        // Color attribute
-        atributes[1] =  {
-           .format = WGPUVertexFormat_Float32x3,
-           .offset = sizeof(float) * 3,
-           .shaderLocation = 1
-        };
-
-        WGPUVertexBufferLayout buff_layout = {
-          .arrayStride = 6 * sizeof(float),
-          .attributeCount = 2,
-          .attributes = atributes
-        };
-
-
-        // Color state: define for the color & blending stages of the pipeline
-        WGPUColorTargetState color_state = {.format = WGPUTextureFormat_BGRA8Unorm };
-        WGPUFragmentState frag_state = {
-           .module = shader,
-           .entryPoint = "frag_main",
-           .targetCount = 1,
-           .targets = &color_state
-        };
-
-
-        // Pipeline
-       // WGPURenderPipelineDescriptor descr = {
-           // .layout = wgpuDeviceCreatePipelineLayout(renderer.context.device, &pipeline_descr)
-        //};
-
-         WGPURenderPipelineDescriptor descr = {
-           .label = NULL,
-           .layout = layout,
-           .vertex = {
-              .module = shader,
-              .entryPoint = "vert_main",
-              .bufferCount = 1,
-              .buffers = &buff_layout
-           },
-           .primitive = {
-               .topology = WGPUPrimitiveTopology_TriangleList,
-               .stripIndexFormat = WGPUIndexFormat_Undefined, // ??
-               .frontFace = WGPUFrontFace_CCW,
-               .cullMode = WGPUCullMode_None
-           },
-           .fragment = &frag_state,
-        };
-
-        renderer.pipeline = wgpuDeviceCreateRenderPipeline(renderer.context.device, &descr);
-    }
+    renderer.pass_descr = {
+       .colorAttachmentCount = 1,
+       .colorAttachments = &renderer.color_attachment,
+       .depthStencilAttachment = NULL, // For now
+    };
 
     return renderer;
 }
@@ -234,50 +147,42 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
 #include <iostream>
 
 inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
-    WGPUTextureView back_buffer = wgpuSwapChainGetCurrentTextureView(renderer.context.swapchain);
+    //renderer.color_attachment.view = text_view;
 
-    WGPURenderPassColorAttachment attachment = {
+    renderer.color_attachment = {
         .view = NULL,
         .loadOp = WGPULoadOp_Clear,
         .storeOp = WGPUStoreOp_Store,
-        .clearValue = {1.0f, 1.0f, 0.0f, 1.0f}
+        .clearValue = {0.0f, 0.0f, 1.0f, 1.0f}
     };
 
-     WGPURenderPassDepthStencilAttachment depth_attach = {
-        .view = renderer.depth_attachment,
-        .depthLoadOp = WGPULoadOp_Clear,
-        .depthStoreOp = WGPUStoreOp_Store,
-        .depthClearValue = 1.0f,
-     };
-
-    WGPURenderPassDescriptor renderpass_descr = {
-         .colorAttachmentCount = 1,
-         .colorAttachments = &attachment,
-         .depthStencilAttachment = &depth_attach,
+    renderer.pass_descr = {
+       .colorAttachmentCount = 1,
+       .colorAttachments = &renderer.color_attachment,
+       .depthStencilAttachment = NULL, // For now
     };
 
-    WGPUBuffer buf = renderer.vertex_buffer;
-    WGPUCommandBuffer commands;
-    {
-        WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer.context.device, NULL);
-        {
-            WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderpass_descr);
-            wgpuRenderPassEncoderSetPipeline(pass,
-                                             renderer.pipeline);
-            wgpuRenderPassEncoderSetVertexBuffer(pass, 0, renderer.vertex_buffer, 0, WGPU_WHOLE_SIZE);
-            wgpuRenderPassEncoderDraw(pass, 3, 0, 0, 0);
-            //wgpuRenderPassEncoderSetIndexBuffer(pass, renderer.indices_buffer, WGPUIndexFormat_Uint16, 0, WGPU_WHOLE_SIZE);
-            //wgpuRenderPassEncoderDrawIndexed(pass, 3, 1, 0, 0, 0);
-            wgpuRenderPassEncoderEnd(pass);
-            wgpuRenderPassEncoderRelease(pass);
-        }
-        commands = wgpuCommandEncoderFinish(encoder, NULL);
-        wgpuCommandEncoderRelease(encoder);
-    }
+    renderer.color_attachment.view = text_view;
+
+    // Create a command encoder
+    WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer.context.device, NULL);
+    WGPURenderPassEncoder r_pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderer.pass_descr);
+
+    wgpuRenderPassEncoderEnd(r_pass);
+    wgpuRenderPassEncoderRelease(r_pass);
+
+    // Get the commands buffer
+    WGPUCommandBuffer commands = wgpuCommandEncoderFinish(encoder, NULL);
+    wgpuCommandEncoderRelease(encoder);
+
+    // Submit to gpu
     wgpuQueueSubmit(renderer.context.queue, 1, &commands);
-    wgpuCommandBufferRelease(commands);
 
-    //wgpuTextureViewRelease(back_buffer);
+    wgpuCommandBufferRelease(commands);
+   // wgpuTextureViewRelease(back_buffer);
+
+    // NOTE: this is for DAWN/native
+    //wgpuSwapChainPresent(renderer.context.swapchain);
 }
 
 #endif // BASIC_RENDER_H_
