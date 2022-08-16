@@ -39,6 +39,7 @@ struct sRenderer {
     sRenderContext context;
 
     WGPURenderPassColorAttachment color_attachment;
+    WGPUTexture depth_texture;
     WGPURenderPassDepthStencilAttachment depth_attachment;
     WGPURenderPassDescriptor pass_descr;
 
@@ -70,7 +71,7 @@ inline void upload_buffers_to_renderer(sRenderer *renderer) {
          -1.0f, -1.0f, 0.0f,    0.0, 1.0f, 0.0f,
          0.0f, 1.0f, 0.0f,      0.0f, 0.0f, 1.0f
     };
-    const uint16_t raw_indices[4] = { 1, 2, 3, 0 }; // Added a item for padding
+    const uint16_t raw_indices[4] = { 0, 1, 2, 0 }; // Added a item for padding
 
     // Create & fill wgpu buffers
 
@@ -125,21 +126,88 @@ inline WGPUShaderModule create_shader_module(const sRenderer &renderer) {
     return shader;
 }
 
+inline void create_depth_attachment(sRenderer *renderer) {
+    WGPUTextureDescriptor descr = {
+       .usage = WGPUTextureUsage_RenderAttachment | WGPUTextureUsage_CopySrc,
+       .dimension = WGPUTextureDimension_2D, // A 2D texture ??
+       .size = {.width = 400, .height = 400, .depthOrArrayLayers = 1},
+       .format = WGPUTextureFormat_Depth16Unorm,
+       .mipLevelCount = 1,
+       .sampleCount = 1,
+    };
+
+    renderer->depth_texture = wgpuDeviceCreateTexture(renderer->context.device, &descr);
+
+    WGPUTextureView depth_tex_view = wgpuTextureCreateView(renderer->depth_texture, NULL);
+
+    renderer->depth_attachment = {
+       .view = depth_tex_view,
+       .depthLoadOp = WGPULoadOp_Clear,
+       .depthStoreOp = WGPUStoreOp_Store,
+       .depthClearValue = 1.0f
+    };
+}
+
 inline sRenderer create_renderer_with_context(sRenderContext &cont) {
     sRenderer renderer = {.context = cont};
 
-    renderer.color_attachment = {
-        .view = NULL,
-        .loadOp = WGPULoadOp_Clear,
-        .storeOp = WGPUStoreOp_Store,
-        .clearValue = {0.0f, 0.0f, 1.0f, 1.0f}
+    upload_buffers_to_renderer(&renderer);
+    create_depth_attachment(&renderer);
+
+    WGPUShaderModule shader = create_shader_module(renderer);
+
+    // Render Pipeline
+    WGPUPipelineLayoutDescriptor pipeline_descr = {
+         .bindGroupLayoutCount = 0,
+         .bindGroupLayouts = NULL
     };
 
-    renderer.pass_descr = {
-       .colorAttachmentCount = 1,
-       .colorAttachments = &renderer.color_attachment,
-       .depthStencilAttachment = NULL, // For now
+    WGPURenderPipelineDescriptor descr = { .layout = wgpuDeviceCreatePipelineLayout(renderer.context.device, &pipeline_descr)};
+
+    WGPUColorTargetState color_state = {.format = WGPUTextureFormat_BGRA8Unorm};
+    WGPUDepthStencilState depth_state = {.format = WGPUTextureFormat_Depth16Unorm, .depthWriteEnabled = false};
+
+    WGPUVertexAttribute atributes[2] = {
+        {
+          .format = WGPUVertexFormat_Float32x3,
+          .offset = 0,
+          .shaderLocation = 0
+        },
+        {
+          .format = WGPUVertexFormat_Float32x3,
+          .offset = sizeof(float) * 3,
+          .shaderLocation = 1
+        }
     };
+    WGPUVertexBufferLayout vertex_layout = {
+        .arrayStride = sizeof(float) * 6,
+        .stepMode = WGPUVertexStepMode_Vertex,
+        .attributeCount = 2,
+        .attributes = atributes
+    };
+    descr.vertex = {
+        .module = shader,
+        .entryPoint = "vert_main",
+        .bufferCount = 1,
+        .buffers = &vertex_layout
+    };
+    WGPUFragmentState frag_state = {
+         .module = shader,
+         .entryPoint = "frag_main",
+         .targetCount = 1,
+         .targets = &color_state,
+    };
+
+    descr.fragment = &frag_state;
+    descr.depthStencil = &depth_state;
+    descr.multisample.count = 1;
+    // Primitve state: define the face culling & primitive for the pipeline
+    descr.primitive.frontFace = WGPUFrontFace_CCW;
+    descr.primitive.cullMode = WGPUCullMode_None;
+    descr.primitive.topology = WGPUPrimitiveTopology_TriangleList;
+    descr.primitive.stripIndexFormat = WGPUIndexFormat_Undefined; // ??
+
+    renderer.pipeline = wgpuDeviceCreateRenderPipeline(renderer.context.device, &descr);
 
     return renderer;
 }
@@ -147,26 +215,28 @@ inline sRenderer create_renderer_with_context(sRenderContext &cont) {
 #include <iostream>
 
 inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
-    //renderer.color_attachment.view = text_view;
-
     renderer.color_attachment = {
-        .view = NULL,
+        .view = text_view,
         .loadOp = WGPULoadOp_Clear,
         .storeOp = WGPUStoreOp_Store,
-        .clearValue = {0.0f, 0.0f, 1.0f, 1.0f}
+        .clearValue = {0.0f, 0.0f, 0.0f, 1.0f}
     };
 
     renderer.pass_descr = {
        .colorAttachmentCount = 1,
        .colorAttachments = &renderer.color_attachment,
-       .depthStencilAttachment = NULL, // For now
+       .depthStencilAttachment = &renderer.depth_attachment,
     };
 
-    renderer.color_attachment.view = text_view;
 
     // Create a command encoder
     WGPUCommandEncoder encoder = wgpuDeviceCreateCommandEncoder(renderer.context.device, NULL);
     WGPURenderPassEncoder r_pass = wgpuCommandEncoderBeginRenderPass(encoder, &renderer.pass_descr);
+
+    // Define the render pass
+    wgpuRenderPassEncoderSetPipeline(r_pass, renderer.pipeline);
+    wgpuRenderPassEncoderSetVertexBuffer(r_pass, 0, renderer.vertex_buffer, 0, WGPU_WHOLE_SIZE);
+    wgpuRenderPassEncoderDraw(r_pass, 3, 1, 0, 0);
 
     wgpuRenderPassEncoderEnd(r_pass);
     wgpuRenderPassEncoderRelease(r_pass);
