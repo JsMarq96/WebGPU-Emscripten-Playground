@@ -43,4 +43,4 @@ else()
     dawncpp
     dawn_native
     dawn_proc)
-else()
+endif()
