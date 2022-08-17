@@ -16,7 +16,7 @@
 // Load Dawn libs
 #include <dawn/webgpu.h>
 #include <dawn/dawn_proc.h>
-#include <dawn_native/DawnNative.h>
+#include <dawn/native/DawnNative.h>
 #include <GLFW/glfw3.h>
 
 #endif
@@ -109,6 +109,26 @@ void _adapter_callback(WGPURequestAdapterStatus status,
 
     wgpuAdapterRequestDevice(adapter, NULL, _device_callback, (void*) &adapter);
 }
+
+inline void config_WGPU() {
+
+    WGPUDevice device;
+    wgpuInstanceRequestAdapter(w_instance, NULL, _adapter_callback, NULL);
+}
+
+inline void config_WebGL2() {
+
+}
+
+int EMSCRIPTEN_KEEPALIVE main() {
+    std::cout << "Test!" << std::endl;
+
+     config_WGPU();
+
+
+    return 0;
+}
+
 // =======================
 // EMSCRIPTEN LOADER  END---------------
 // =======================
@@ -129,7 +149,7 @@ dawn_native::Adapter fetch_preffered_adapter(const std::vector<dawn_native::Adap
             adapters[j].GetProperties(&props);
 
             if (props.adapterType == prefered_hardware[i] && props.backendType == preferred_backend) {
-                return adapter;
+                return adapters[j];
             }
         }
     }
@@ -154,7 +174,7 @@ void GetDevice() {
     feature_toggles.forceEnabledToggles = &enabled_toggles[0];
 
     wgpu::DeviceDescriptor descr = {
-       .nextInChain = &featured_toggles,
+       .nextInChain = &feature_toggles,
        .label = "DawnDevice"
     };
 
@@ -167,7 +187,8 @@ void GetDevice() {
 
 void create_window() {
     if (!glfwInit()) {
-        return EXIT_FAILURE;
+        return;
+        //return EXIT_FAILURE;
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -188,22 +209,3 @@ void create_window() {
     glfwTerminate();
 }
 #endif
-
-inline void config_WGPU() {
-
-    WGPUDevice device;
-    wgpuInstanceRequestAdapter(w_instance, NULL, _adapter_callback, NULL);
-}
-
-inline void config_WebGL2() {
-
-}
-
-int EMSCRIPTEN_KEEPALIVE main() {
-    std::cout << "Test!" << std::endl;
-
-     config_WGPU();
-
-
-    return 0;
-}

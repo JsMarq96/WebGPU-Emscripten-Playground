@@ -1,7 +1,9 @@
 #ifndef BASIC_RENDER_H_
 #define BASIC_RENDER_H_
 
+#ifdef __EMSCRIPTEM__
 #include <emscripten/emscripten.h>
+#endif
 #include <webgpu/webgpu.h>
 #include <webgpu/webgpu_cpp.h>
 

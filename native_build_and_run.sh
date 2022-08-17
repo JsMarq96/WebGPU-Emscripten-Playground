@@ -4,4 +4,4 @@ mkdir build
 cd build/
 cmake ..
 
-intercept-build make
+intercept-build make -j 12
