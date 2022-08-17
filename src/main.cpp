@@ -17,6 +17,8 @@
 #include <dawn/webgpu.h>
 #include <dawn/dawn_proc.h>
 #include <dawn/native/DawnNative.h>
+#define GLFW_INCLUDE_NONE
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #endif
@@ -157,6 +159,8 @@ dawn_native::Adapter fetch_preffered_adapter(const std::vector<dawn_native::Adap
     return {};
 }
 
+GLFWwindow* window;
+
 void GetDevice() {
     instance = new dawn_native::Instance();
     instance->DiscoverDefaultAdapters();
@@ -182,11 +186,19 @@ void GetDevice() {
     DawnProcTable procs = dawn_native::GetProcs();
 
     std::cout << "Everython thing good" << std::endl;
+
+    glfwMakeContextCurrent(window);
+    while(!glfwWindowShouldClose(window)) {}
     //dawnProcSetProcs(&procs);
     //callback(device);
 }
 
+static void glfw_window_error_callback(int error, const char* description) {
+  fprintf(stderr, "GLFW Error occured, Error id: %i, Description: %s\n", error,
+          description);
+}
 void create_window() {
+    glfwSetErrorCallback(glfw_window_error_callback);
     if (!glfwInit()) {
         return;
         //return EXIT_FAILURE;
@@ -194,14 +206,14 @@ void create_window() {
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    GLFWwindow* window = glfwCreateWindow(800, 800, "WIN_NAME", NULL, NULL);
-
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);
+    window = glfwCreateWindow(800, 800, "WIN_NAME", NULL, NULL);
 
     if (!window) {
         std::cout << "Error, could not create window" << std::endl;
     } else {
+        //glfwMakeContextCurrent(window);
+       // glfwSwapInterval(1);
+
         // Create webgpu context
         GetDevice();
     }

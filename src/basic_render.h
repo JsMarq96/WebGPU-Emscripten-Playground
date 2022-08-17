@@ -254,7 +254,9 @@ inline void render(sRenderer &renderer, WGPUTextureView &text_view) {
    // wgpuTextureViewRelease(back_buffer);
 
     // NOTE: this is for DAWN/native
-    //wgpuSwapChainPresent(renderer.context.swapchain);
+#ifndef __EMSCRIPTEN__
+    wgpuSwapChainPresent(renderer.context.swapchain);
+#endif
 }
 
 #endif // BASIC_RENDER_H_
