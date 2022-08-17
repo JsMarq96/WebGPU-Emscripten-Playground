@@ -133,7 +133,7 @@ int EMSCRIPTEN_KEEPALIVE main() {
 // EMSCRIPTEN LOADER  END---------------
 // =======================
 #else
-dawn_native::Instance instance;
+dawn_native::Instance *instance;
 
 
 dawn_native::Adapter fetch_preffered_adapter(const std::vector<dawn_native::Adapter>& adapters) {
@@ -158,11 +158,11 @@ dawn_native::Adapter fetch_preffered_adapter(const std::vector<dawn_native::Adap
 }
 
 void GetDevice() {
-    instance = dawn_native::Instance();
-    instance.DiscoverDefaultAdapters();
+    instance = new dawn_native::Instance();
+    instance->DiscoverDefaultAdapters();
 
     // Get an adapter for the backend to use, and create the device.
-    dawn_native::Adapter backendAdapter = fetch_preffered_adapter(instance.GetAdapters());
+    dawn_native::Adapter backendAdapter = fetch_preffered_adapter(instance->GetAdapters());
     //assert(backendAdapter.GetBackendType() == dawn_native::BackendType::Metal);
 
     // Feature toggles
@@ -181,6 +181,7 @@ void GetDevice() {
     wgpu::Device device = wgpu::Device::Acquire(backendAdapter.CreateDevice(&descr));
     DawnProcTable procs = dawn_native::GetProcs();
 
+    std::cout << "Everython thing good" << std::endl;
     //dawnProcSetProcs(&procs);
     //callback(device);
 }
@@ -207,5 +208,11 @@ void create_window() {
 
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+int main() {
+    std::cout << "cowboy" << std::endl;
+    create_window();
+    return 0;
 }
 #endif

@@ -36,5 +36,6 @@ else()
     dawn_headers
     dawncpp
     dawn_native
-    dawn_proc)
+    dawn_proc
+    glfw)
 endif()
