@@ -1,0 +1,3 @@
+build/*
+external/dawn/*
+externel/depot_tools/*

@@ -17,6 +17,7 @@
 #include <dawn/webgpu.h>
 #include <dawn/dawn_proc.h>
 #include <dawn_native/DawnNative.h>
+#include <GLFW/glfw3.h>
 
 #endif
 
@@ -114,19 +115,77 @@ void _adapter_callback(WGPURequestAdapterStatus status,
 #else
 dawn_native::Instance instance;
 
+
+dawn_native::Adapter fetch_preffered_adapter(const std::vector<dawn_native::Adapter>& adapters) {
+    wgpu::AdapterType prefered_hardware[] = {
+       wgpu::AdapterType::DiscreteGPU,
+       wgpu::AdapterType::IntegratedGPU
+    };
+    wgpu::BackendType preferred_backend = wgpu::BackendType::Vulkan;
+
+    for(uint8_t i = 0; i < 2; i++) {
+        for(uint8_t j = 0; j < adapters.size(); j++) {
+            wgpu::AdapterProperties props = {};
+            adapters[j].GetProperties(&props);
+
+            if (props.adapterType == prefered_hardware[i] && props.backendType == preferred_backend) {
+                return adapter;
+            }
+        }
+    }
+
+    return {};
+}
+
 void GetDevice() {
     instance = dawn_native::Instance();
     instance.DiscoverDefaultAdapters();
 
     // Get an adapter for the backend to use, and create the device.
-    dawn_native::Adapter backendAdapter = instance.GetAdapters()[0];
-    assert(backendAdapter.GetBackendType() == dawn_native::BackendType::Metal);
+    dawn_native::Adapter backendAdapter = fetch_preffered_adapter(instance.GetAdapters());
+    //assert(backendAdapter.GetBackendType() == dawn_native::BackendType::Metal);
 
-    wgpu::Device device = wgpu::Device::Acquire(backendAdapter.CreateDevice());
+    // Feature toggles
+    wgpu::DawnTogglesDeviceDescriptor feature_toggles{};
+    std::vector<const char*> enabled_toggles;
+    enabled_toggles.push_back("disallow_spirv"); // Prevents SPIR-V since it doesnt work well on apple
+
+    feature_toggles.forceEnabledTogglesCount = enabled_toggles.size();
+    feature_toggles.forceEnabledToggles = &enabled_toggles[0];
+
+    wgpu::DeviceDescriptor descr = {
+       .nextInChain = &featured_toggles,
+       .label = "DawnDevice"
+    };
+
+    wgpu::Device device = wgpu::Device::Acquire(backendAdapter.CreateDevice(&descr));
     DawnProcTable procs = dawn_native::GetProcs();
 
-    dawnProcSetProcs(&procs);
-    callback(device);
+    //dawnProcSetProcs(&procs);
+    //callback(device);
+}
+
+void create_window() {
+    if (!glfwInit()) {
+        return EXIT_FAILURE;
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
+    GLFWwindow* window = glfwCreateWindow(800, 800, "WIN_NAME", NULL, NULL);
+
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+
+    if (!window) {
+        std::cout << "Error, could not create window" << std::endl;
+    } else {
+        // Create webgpu context
+        GetDevice();
+    }
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
 }
 #endif
 
